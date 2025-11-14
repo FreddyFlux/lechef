@@ -6,7 +6,7 @@ export default defineSchema({
     userId: v.string(),
     title: v.string(),
     description: v.optional(v.string()),
-    cuisine: v.string(),
+    cuisine: v.array(v.string()),
     skillLevel: v.string(),
     cookTime: v.number(),
     prepTime: v.number(),
@@ -19,11 +19,10 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_and_created", ["userId", "createdAt"])
-    .index("by_cuisine", ["cuisine"])
     .index("by_skill_level", ["skillLevel"])
     .searchIndex("search_title", {
       searchField: "title",
-      filterFields: ["cuisine", "skillLevel"],
+      filterFields: ["skillLevel"],
     }),
   
   recipeSteps: defineTable({

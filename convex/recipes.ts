@@ -25,7 +25,7 @@ export const create = mutation({
   args: {
     title: v.string(),
     description: v.optional(v.string()),
-    cuisine: v.string(),
+    cuisine: v.array(v.string()),
     skillLevel: v.string(),
     cookTime: v.number(),
     prepTime: v.number(),
@@ -33,6 +33,8 @@ export const create = mutation({
     canFreeze: v.boolean(),
     canReheat: v.boolean(),
     servings: v.number(),
+    ingredients: v.optional(v.array(v.string())),
+    steps: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const userId = await getUserId(ctx);
@@ -53,6 +55,31 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    
+    // Insert ingredients
+    if (args.ingredients && args.ingredients.length > 0) {
+      for (let i = 0; i < args.ingredients.length; i++) {
+        await ctx.db.insert("ingredients", {
+          recipeId,
+          name: args.ingredients[i],
+          amount: "",
+          order: i,
+        });
+      }
+    }
+    
+    // Insert cooking steps
+    if (args.steps && args.steps.length > 0) {
+      for (let i = 0; i < args.steps.length; i++) {
+        await ctx.db.insert("recipeSteps", {
+          recipeId,
+          type: "cooking",
+          stepNumber: i + 1,
+          instruction: args.steps[i],
+          order: i,
+        });
+      }
+    }
     
     return recipeId;
   },
