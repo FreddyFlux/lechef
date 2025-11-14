@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { UserButton, SignInButton, SignUpButton, useUser } from "@clerk/nextjs";
-import { LogIn } from "lucide-react";
+import { LogIn, BookOpenText } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ export function Navbar() {
             href="/"
             className="flex items-center text-xl font-bold tracking-tight hover:opacity-80 transition-opacity"
           >
+            <BookOpenText className="h-5 w-5 mr-2" />
             leChef
           </Link>
           <Separator orientation="vertical" className="h-6 hidden sm:block" />

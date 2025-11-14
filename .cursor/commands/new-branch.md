@@ -22,6 +22,10 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
 git merge "$CURRENT_BRANCH" -m "chore: merge $CURRENT_BRANCH into main"
 fi
 
+# Push main branch to remote
+
+git push origin main
+
 # Create and switch to new branch
 
 git checkout -b {{args}}
