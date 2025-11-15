@@ -46,5 +46,18 @@ export default defineSchema({
     order: v.number(),
   })
     .index("by_recipe", ["recipeId"]),
+  
+  weeklyPlans: defineTable({
+    userId: v.string(),
+    weekStartDate: v.number(), // Timestamp for the start of the week (Monday)
+    days: v.array(v.object({
+      dayOfWeek: v.number(), // 0 = Monday, 6 = Sunday
+      recipeId: v.optional(v.id("recipes")),
+    })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_week", ["userId", "weekStartDate"]),
 });
 

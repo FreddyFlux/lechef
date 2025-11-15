@@ -423,3 +423,82 @@ export const deleteImage = mutation({
   },
 });
 
+// Search recipes - returns both public recipes and user's own recipes
+export const search = query({
+  args: { 
+    searchQuery: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+    
+    const userId = identity.subject;
+    const limit = args.limit || 50;
+    
+    // Get user's own recipes
+    const ownRecipes = await ctx.db
+      .query("recipes")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    
+    // Get all public recipes
+    const allRecipes = await ctx.db.query("recipes").collect();
+    const publicRecipes = allRecipes.filter(
+      (recipe) => recipe.isPublic === true && recipe.userId !== userId
+    );
+    
+    // Combine and deduplicate (in case user has public recipes)
+    const recipeMap = new Map();
+    
+    // Add own recipes first (so they take precedence)
+    for (const recipe of ownRecipes) {
+      recipeMap.set(recipe._id, recipe);
+    }
+    
+    // Add public recipes
+    for (const recipe of publicRecipes) {
+      if (!recipeMap.has(recipe._id)) {
+        recipeMap.set(recipe._id, recipe);
+      }
+    }
+    
+    let results = Array.from(recipeMap.values());
+    
+    // Filter by search query if provided
+    if (args.searchQuery && args.searchQuery.trim()) {
+      const queryLower = args.searchQuery.toLowerCase().trim();
+      results = results.filter((recipe) => {
+        const titleMatch = recipe.title.toLowerCase().includes(queryLower);
+        const descriptionMatch = recipe.description?.toLowerCase().includes(queryLower);
+        const cuisineMatch = recipe.cuisine.some((c: string) => 
+          c.toLowerCase().includes(queryLower)
+        );
+        return titleMatch || descriptionMatch || cuisineMatch;
+      });
+    }
+    
+    // Limit results
+    results = results.slice(0, limit);
+    
+    // Get image URLs for all recipes
+    const resultsWithImages = await Promise.all(
+      results.map(async (recipe) => {
+        const imageUrl = recipe.imageStorageId
+          ? await ctx.storage.getUrl(recipe.imageStorageId)
+          : null;
+        
+        return {
+          ...recipe,
+          imageUrl,
+          isOwnRecipe: recipe.userId === userId,
+        };
+      })
+    );
+    
+    return resultsWithImages;
+  },
+});
+

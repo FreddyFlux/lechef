@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChefHat, ArrowRight } from "lucide-react";
+import { ChefHat, ArrowRight, Calendar } from "lucide-react";
 
 export default function DashboardPage() {
   return (
@@ -13,7 +13,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Link href="/dashboard/recipes">
           <div className="border rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer h-full">
             <div className="flex items-center justify-between mb-4">
@@ -36,6 +36,19 @@ export default function DashboardPage() {
             <h2 className="text-xl font-semibold mb-2">Create Recipe</h2>
             <p className="text-muted-foreground">
               Add a new recipe to your collection
+            </p>
+          </div>
+        </Link>
+
+        <Link href="/dashboard/weekly-plan">
+          <div className="border rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer h-full">
+            <div className="flex items-center justify-between mb-4">
+              <Calendar className="h-8 w-8 text-primary" />
+              <ArrowRight className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Weekly Plan</h2>
+            <p className="text-muted-foreground">
+              Plan your meals for the week
             </p>
           </div>
         </Link>

@@ -2,16 +2,24 @@
 
 import Link from "next/link";
 import { UserButton, SignInButton, SignUpButton, useUser } from "@clerk/nextjs";
-import { LogIn, ChefHat } from "lucide-react";
+import { LogIn, ChefHat, Calendar, BookOpen } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "@/components/ui/navigation-menu";
 
 export function Navbar() {
   const { isSignedIn, isLoaded } = useUser();
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <div className="container flex h-14 items-center justify-between mx-auto px-4">
         {/* Left side: Logo and Navigation */}
         <div className="flex items-center gap-4">
@@ -24,12 +32,39 @@ export function Navbar() {
           </Link>
           <Separator orientation="vertical" className="h-6 hidden sm:block" />
           {isLoaded && isSignedIn && (
-            <Link
-              href="/dashboard"
-              className="hidden sm:flex items-center text-sm font-medium hover:text-foreground/80 transition-colors text-foreground/60"
-            >
-              Dashboard
-            </Link>
+            <NavigationMenu viewport={false}>
+              <NavigationMenuList>
+                <NavigationMenuItem>
+                  <NavigationMenuTrigger className="hidden sm:flex">
+                    Dashboard
+                  </NavigationMenuTrigger>
+                  <NavigationMenuContent>
+                    <ul className="grid w-[200px] gap-1 p-2">
+                      <li>
+                        <NavigationMenuLink asChild>
+                          <Link
+                            href="/dashboard/recipes"
+                            className="flex justify-start gap-2"
+                          >
+                            My Recipes
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                      <li>
+                        <NavigationMenuLink asChild>
+                          <Link
+                            href="/dashboard/weekly-plan"
+                            className="flex justify-start  gap-2"
+                          >
+                            My Weekly Plans
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                    </ul>
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
+              </NavigationMenuList>
+            </NavigationMenu>
           )}
           <Link
             href="/recipes"
