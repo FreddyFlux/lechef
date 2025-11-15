@@ -119,6 +119,7 @@ export default function EditRecipePage() {
             servings: recipe.servings,
             ingredients: recipe.ingredients,
             steps: recipe.steps,
+            imageUrl: recipe.imageUrl || undefined,
           }}
           onSuccess={handleSuccess}
         />

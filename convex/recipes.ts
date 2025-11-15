@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { getUserId } from "./auth";
 
@@ -51,10 +51,16 @@ export const getById = query({
       .order("asc")
       .collect();
     
+    // Get image URL if exists
+    const imageUrl = recipe.imageStorageId
+      ? await ctx.storage.getUrl(recipe.imageStorageId)
+      : null;
+    
     return {
       ...recipe,
       ingredients,
       steps,
+      imageUrl,
     };
   },
 });
@@ -73,6 +79,7 @@ export const create = mutation({
     servings: v.number(),
     ingredients: v.optional(v.array(v.string())),
     steps: v.optional(v.array(v.string())),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const userId = await getUserId(ctx);
@@ -92,6 +99,7 @@ export const create = mutation({
       servings: args.servings,
       createdAt: now,
       updatedAt: now,
+      imageStorageId: args.imageStorageId,
     });
     
     // Insert ingredients
@@ -138,6 +146,8 @@ export const update = mutation({
     servings: v.number(),
     ingredients: v.optional(v.array(v.string())),
     steps: v.optional(v.array(v.string())),
+    imageStorageId: v.optional(v.id("_storage")),
+    removeImage: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = await getUserId(ctx);
@@ -148,9 +158,26 @@ export const update = mutation({
       throw new Error("Recipe not found or you don't have permission to edit it");
     }
     
+    // Handle image updates
+    // Delete old image if being replaced or removed
+    if (recipe.imageStorageId) {
+      const shouldDeleteOldImage = 
+        args.removeImage === true || // Image is being explicitly removed
+        (args.imageStorageId !== undefined && args.imageStorageId !== recipe.imageStorageId); // Image is being replaced
+      
+      if (shouldDeleteOldImage) {
+        try {
+          await ctx.storage.delete(recipe.imageStorageId);
+        } catch (error) {
+          // Log but don't fail if image deletion fails
+          console.error("Failed to delete old image:", error);
+        }
+      }
+    }
+    
     // Update recipe
     const now = Date.now();
-    await ctx.db.patch(args.id, {
+    const updateData: any = {
       title: args.title,
       description: args.description,
       cuisine: args.cuisine,
@@ -162,7 +189,19 @@ export const update = mutation({
       canReheat: args.canReheat,
       servings: args.servings,
       updatedAt: now,
-    });
+    };
+    
+    // Handle image update: if removeImage is true, clear it; if imageStorageId is provided, update it; otherwise preserve existing
+    if (args.removeImage === true) {
+      // Clear the image field
+      updateData.imageStorageId = undefined;
+    } else if (args.imageStorageId !== undefined) {
+      // Set new image
+      updateData.imageStorageId = args.imageStorageId;
+    }
+    // If both are undefined, don't include it in update (preserves existing)
+    
+    await ctx.db.patch(args.id, updateData);
     
     // Delete existing ingredients
     const existingIngredients = await ctx.db
@@ -224,6 +263,16 @@ export const remove = mutation({
       throw new Error("Recipe not found or you don't have permission to delete it");
     }
     
+    // Delete associated image if exists
+    if (recipe.imageStorageId) {
+      try {
+        await ctx.storage.delete(recipe.imageStorageId);
+      } catch (error) {
+        // Log but don't fail if image deletion fails
+        console.error("Failed to delete recipe image:", error);
+      }
+    }
+    
     // Delete all related ingredients
     const ingredients = await ctx.db
       .query("ingredients")
@@ -248,6 +297,129 @@ export const remove = mutation({
     await ctx.db.delete(args.id);
     
     return args.id;
+  },
+});
+
+export const checkSlugExists = query({
+  args: { 
+    slug: v.string(),
+    excludeRecipeId: v.optional(v.id("recipes")),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("recipes")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .first();
+    
+    // If no existing recipe found, slug is available
+    if (!existing) {
+      return false;
+    }
+    
+    // If excluding a recipe ID and it matches, slug is available (for editing)
+    if (args.excludeRecipeId && existing._id === args.excludeRecipeId) {
+      return false;
+    }
+    
+    // Otherwise, slug exists
+    return true;
+  },
+});
+
+export const shareRecipe = mutation({
+  args: {
+    id: v.id("recipes"),
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx);
+    
+    // Verify ownership
+    const recipe = await ctx.db.get(args.id);
+    if (!recipe || recipe.userId !== userId) {
+      throw new Error("Recipe not found or you don't have permission to share it");
+    }
+    
+    // Check if slug already exists (excluding current recipe)
+    const existing = await ctx.db
+      .query("recipes")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .first();
+    
+    if (existing && existing._id !== args.id) {
+      throw new Error("A recipe with this slug already exists. Please choose a different name.");
+    }
+    
+    // Update recipe to be public with slug
+    await ctx.db.patch(args.id, {
+      slug: args.slug,
+      isPublic: true,
+      updatedAt: Date.now(),
+    });
+    
+    return args.id;
+  },
+});
+
+export const getBySlug = query({
+  args: { slug: v.string() },
+  handler: async (ctx, args) => {
+    const recipe = await ctx.db
+      .query("recipes")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .first();
+    
+    // Only return if recipe is public
+    if (!recipe || !recipe.isPublic) {
+      return null;
+    }
+    
+    // Get ingredients
+    const ingredients = await ctx.db
+      .query("ingredients")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", recipe._id))
+      .order("asc")
+      .collect();
+    
+    // Get cooking steps
+    const steps = await ctx.db
+      .query("recipeSteps")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", recipe._id))
+      .order("asc")
+      .collect();
+    
+    // Get image URL if exists
+    const imageUrl = recipe.imageStorageId
+      ? await ctx.storage.getUrl(recipe.imageStorageId)
+      : null;
+    
+    return {
+      ...recipe,
+      ingredients,
+      steps,
+      imageUrl,
+    };
+  },
+});
+
+// Generate upload URL for image upload
+export const generateUploadUrl = action({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// Delete image from storage
+export const deleteImage = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    await getUserId(ctx);
+    await ctx.storage.delete(args.storageId);
   },
 });
 

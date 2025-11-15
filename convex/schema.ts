@@ -16,10 +16,14 @@ export default defineSchema({
     servings: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
+    slug: v.optional(v.string()),
+    isPublic: v.optional(v.boolean()),
+    imageStorageId: v.optional(v.id("_storage")),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_created", ["userId", "createdAt"])
     .index("by_skill_level", ["skillLevel"])
+    .index("by_slug", ["slug"])
     .searchIndex("search_title", {
       searchField: "title",
       filterFields: ["skillLevel"],

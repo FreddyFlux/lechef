@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { useWakeLock } from "@/lib/useWakeLock";
-import { ShareRecipeDialog } from "@/components/share-recipe-dialog";
 import { 
   ChefHat, 
   Loader2, 
@@ -14,20 +11,16 @@ import {
   Users, 
   ChefHat as CookingModeIcon,
   AlertCircle,
-  Edit,
-  Share2,
-  ExternalLink
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-export default function RecipeDetailPage() {
+export default function PublicRecipePage() {
   const params = useParams();
-  const recipeId = params.id as Id<"recipes">;
+  const slug = params.slug as string;
   
-  const recipe = useQuery(api.recipes.getById, { id: recipeId });
+  const recipe = useQuery(api.recipes.getBySlug, { slug });
   const { isSupported, isActive, error, requestWakeLock, releaseWakeLock } = useWakeLock();
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
   const toggleCookingMode = async () => {
     if (isActive) {
@@ -55,10 +48,10 @@ export default function RecipeDetailPage() {
           <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <h2 className="text-2xl font-bold mb-2">Recipe Not Found</h2>
           <p className="text-muted-foreground mb-4">
-            This recipe doesn't exist or you don't have permission to view it.
+            This recipe doesn't exist or is no longer available.
           </p>
-          <Link href="/dashboard/recipes">
-            <Button>Back to Recipes</Button>
+          <Link href="/">
+            <Button>Go Home</Button>
           </Link>
         </div>
       </div>
@@ -70,43 +63,16 @@ export default function RecipeDetailPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
-        <div className="flex-1 min-w-0">
-          <Link 
-            href="/dashboard/recipes"
-            className="text-sm text-muted-foreground hover:text-foreground mb-2 inline-block"
-          >
-            ← Back to Recipes
-          </Link>
-          {recipe.imageUrl && (
-            <h1 className="text-3xl font-bold tracking-tight mb-2">{recipe.title}</h1>
-          )}
-        </div>
-        <div className="flex flex-col gap-2">
-          <Link href={`/dashboard/recipes/${recipeId}/edit`}>
-            <Button variant="outline" size="lg">
-              <Edit className="mr-2 h-5 w-5" />
-              Edit Recipe
-            </Button>
-          </Link>
-          {recipe.isPublic && recipe.slug ? (
-            <Link href={`/recipes/${recipe.slug}`} target="_blank">
-              <Button variant="outline" size="lg">
-                <ExternalLink className="mr-2 h-5 w-5" />
-                View Public Recipe
-              </Button>
-            </Link>
-          ) : (
-            <Button
-              onClick={() => setShareDialogOpen(true)}
-              variant="outline"
-              size="lg"
-            >
-              <Share2 className="mr-2 h-5 w-5" />
-              Share Recipe
-            </Button>
-          )}
-        </div>
+      <div className="mb-6">
+        <Link 
+          href="/"
+          className="text-sm text-muted-foreground hover:text-foreground mb-2 inline-block"
+        >
+          ← Back to Home
+        </Link>
+        {recipe.imageUrl && (
+          <h1 className="text-3xl font-bold tracking-tight mb-2">{recipe.title}</h1>
+        )}
       </div>
 
       {/* Hero Image */}
@@ -129,38 +95,33 @@ export default function RecipeDetailPage() {
               <p className="text-muted-foreground">{recipe.description}</p>
             </div>
           )}
-          <div className="flex flex-col gap-2">
-          {isSupported ? (
-            <Button
-              onClick={toggleCookingMode}
-              variant={isActive ? "default" : "outline"}
-              size="lg"
-              className={isActive ? "bg-primary" : ""}
-            >
-              {isActive ? (
-                <>
-                  <CookingModeIcon className="mr-2 h-5 w-5" />
-                  Exit Cooking Mode
-                </>
-              ) : (
-                <>
-                  <CookingModeIcon className="mr-2 h-5 w-5" />
-                  Start Cooking Mode
-                </>
+          {isSupported && (
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={toggleCookingMode}
+                variant={isActive ? "default" : "outline"}
+                size="lg"
+                className={isActive ? "bg-primary" : ""}
+              >
+                {isActive ? (
+                  <>
+                    <CookingModeIcon className="mr-2 h-5 w-5" />
+                    Exit Cooking Mode
+                  </>
+                ) : (
+                  <>
+                    <CookingModeIcon className="mr-2 h-5 w-5" />
+                    Start Cooking Mode
+                  </>
+                )}
+              </Button>
+              {error && (
+                <div className="text-xs text-destructive max-w-[200px]">
+                  {error}
+                </div>
               )}
-            </Button>
-          ) : (
-            <div className="text-xs text-muted-foreground max-w-[200px]">
-              <AlertCircle className="h-4 w-4 inline mr-1" />
-              Wake Lock not supported
             </div>
           )}
-          {error && (
-            <div className="text-xs text-destructive max-w-[200px]">
-              {error}
-            </div>
-          )}
-          </div>
         </div>
       </div>
 
@@ -273,19 +234,6 @@ export default function RecipeDetailPage() {
           <CookingModeIcon className="h-5 w-5 animate-pulse" />
           <span className="font-medium">Cooking Mode Active</span>
         </div>
-      )}
-
-      {/* Share Recipe Dialog */}
-      {recipe && (
-        <ShareRecipeDialog
-          open={shareDialogOpen}
-          onOpenChange={setShareDialogOpen}
-          recipeId={recipeId}
-          recipeTitle={recipe.title}
-          onSuccess={(slug) => {
-            // Optionally refresh the recipe data or show success message
-          }}
-        />
       )}
     </div>
   );

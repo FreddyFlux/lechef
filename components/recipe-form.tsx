@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useMutation } from "convex/react";
+import { useState, useEffect, useRef } from "react";
+import { useMutation, useAction } from "convex/react";
 import { useAuth } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Loader2, X, ArrowRight, Move, Save } from "lucide-react";
+import { Plus, Loader2, X, ArrowRight, Move, Save, Upload, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { processImageFile } from "@/lib/image-utils";
 import {
   DndContext,
   closestCenter,
@@ -45,6 +46,7 @@ interface RecipeFormProps {
     servings: number;
     ingredients?: Array<{ name: string; amount?: string }>;
     steps?: Array<{ instruction: string; stepNumber?: number }>;
+    imageUrl?: string;
   };
 }
 
@@ -156,6 +158,7 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
   const { isSignedIn, isLoaded } = useAuth();
   const createRecipe = useMutation(api.recipes.create);
   const updateRecipe = useMutation(api.recipes.update);
+  const generateUploadUrl = useAction(api.recipes.generateUploadUrl);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cuisineTags, setCuisineTags] = useState<string[]>([]);
   const [cuisineInput, setCuisineInput] = useState("");
@@ -163,6 +166,15 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
   const [ingredientInput, setIngredientInput] = useState("");
   const [steps, setSteps] = useState<string[]>([]);
   const [stepInput, setStepInput] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl || null);
+  const [imageStorageId, setImageStorageId] = useState<Id<"_storage"> | null>(null);
+  const [newlyUploadedStorageId, setNewlyUploadedStorageId] = useState<Id<"_storage"> | null>(null);
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const deleteImage = useMutation(api.recipes.deleteImage);
   
   const isEditing = !!recipeId && !!initialData;
 
@@ -296,6 +308,123 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
     }
   };
 
+  const processAndUploadImage = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      
+      // Process and compress image
+      const compressedBlob = await processImageFile(file);
+      
+      // Create preview
+      const previewUrl = URL.createObjectURL(compressedBlob);
+      setImagePreview(previewUrl);
+      setImageFile(compressedBlob as File);
+      
+      // Upload to Convex
+      const uploadUrl = await generateUploadUrl();
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": compressedBlob.type },
+        body: compressedBlob,
+      });
+      
+      if (!result.ok) {
+        throw new Error("Failed to upload image");
+      }
+      
+      // Convex storage returns JSON with { storageId: "..." }
+      const response = await result.json();
+      const storageIdTyped = response.storageId as Id<"_storage">;
+      
+      // If there was a previously uploaded image that wasn't saved, delete it
+      if (newlyUploadedStorageId && newlyUploadedStorageId !== storageIdTyped) {
+        try {
+          await deleteImage({ storageId: newlyUploadedStorageId });
+        } catch (error) {
+          console.error("Failed to delete previous upload:", error);
+        }
+      }
+      
+      setImageStorageId(storageIdTyped);
+      setNewlyUploadedStorageId(storageIdTyped);
+      setImageRemoved(false);
+      
+      toast.success("Image uploaded successfully!");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload image";
+      toast.error(errorMessage);
+      setImageFile(null);
+      setImagePreview(initialData?.imageUrl || null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      throw error;
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processAndUploadImage(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isUploadingImage) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (isUploadingImage) return;
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid file type. Please upload a JPEG, PNG, or WebP image.");
+      return;
+    }
+
+    await processAndUploadImage(file);
+  };
+
+  const handleRemoveImage = async () => {
+    // If there's a newly uploaded image that wasn't saved yet, delete it from storage
+    if (newlyUploadedStorageId) {
+      try {
+        await deleteImage({ storageId: newlyUploadedStorageId });
+      } catch (error) {
+        console.error("Failed to delete uploaded image:", error);
+      }
+    }
+    
+    setImageFile(null);
+    setImagePreview(null);
+    setImageStorageId(null);
+    setNewlyUploadedStorageId(null);
+    setImageRemoved(true);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -330,6 +459,9 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
         servings: parseInt(formData.servings) || 1,
         ingredients: ingredients,
         steps: steps,
+        // When editing: if image was removed, set removeImage flag; if new image uploaded, pass storageId; otherwise undefined (preserve existing)
+        imageStorageId: imageStorageId || undefined,
+        removeImage: isEditing && imageRemoved ? true : undefined,
       };
 
       if (isEditing && recipeId) {
@@ -337,6 +469,8 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
           id: recipeId,
           ...recipeData,
         });
+        // Clear newly uploaded flag since image is now saved
+        setNewlyUploadedStorageId(null);
         toast.success("Recipe updated successfully!");
       } else {
         await createRecipe(recipeData);
@@ -360,6 +494,14 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
         setIngredientInput("");
         setSteps([]);
         setStepInput("");
+        setImageFile(null);
+        setImagePreview(null);
+        setImageStorageId(null);
+        setNewlyUploadedStorageId(null);
+        setImageRemoved(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }
       
       // Call success callback
@@ -414,6 +556,78 @@ export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps
           placeholder="Optional description of your recipe"
           rows={3}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="image">Hero Image</Label>
+        <div className="space-y-3">
+          {imagePreview ? (
+            <div className="relative group">
+              <div className="relative w-full h-64 rounded-lg overflow-hidden border bg-muted">
+                <img
+                  src={imagePreview}
+                  alt="Recipe preview"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2 p-2 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/90"
+                  aria-label="Remove image"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                isDragging
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50"
+              } ${isUploadingImage ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <ImageIcon className={`h-12 w-12 mx-auto mb-4 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+              <Label
+                htmlFor="image-upload"
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              >
+                {isUploadingImage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Upload Image
+                  </>
+                )}
+              </Label>
+              <input
+                ref={fileInputRef}
+                id="image-upload"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleImageChange}
+                disabled={isUploadingImage}
+                className="hidden"
+              />
+              <p className="text-sm text-muted-foreground mt-2">
+                {isDragging ? (
+                  <span className="text-primary font-medium">Drop image here</span>
+                ) : (
+                  <>
+                    Drag and drop an image here, or click to select. JPEG, PNG, or WebP. Max 10MB. Will be compressed automatically.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">

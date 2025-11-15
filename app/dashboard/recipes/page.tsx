@@ -89,11 +89,11 @@ export default function RecipesPage() {
             {recipes.map((recipe) => (
               <div
                 key={recipe._id}
-                className="border rounded-lg p-4 hover:shadow-md transition-shadow relative group"
+                className="border rounded-lg p-4 hover:shadow-md transition-shadow relative group flex flex-col h-full"
               >
                 <Link
                   href={`/dashboard/recipes/${recipe._id}`}
-                  className="block"
+                  className="block flex flex-col flex-grow"
                 >
                   <h3 className="font-semibold text-lg mb-2">{recipe.title}</h3>
                   {recipe.description && (
@@ -101,32 +101,34 @@ export default function RecipesPage() {
                       {recipe.description}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {Array.isArray(recipe.cuisine) ? (
-                      recipe.cuisine.map((cuisine, index) => (
-                        <span
-                          key={index}
-                          className="bg-secondary px-2 py-1 rounded text-xs"
-                        >
-                          {cuisine}
+                  <div className="mt-auto">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {Array.isArray(recipe.cuisine) ? (
+                        recipe.cuisine.map((cuisine, index) => (
+                          <span
+                            key={index}
+                            className="bg-secondary px-2 py-1 rounded text-xs"
+                          >
+                            {cuisine}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="bg-secondary px-2 py-1 rounded text-xs">
+                          {recipe.cuisine}
                         </span>
-                      ))
-                    ) : (
-                      <span className="bg-secondary px-2 py-1 rounded text-xs">
-                        {recipe.cuisine}
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span className="bg-secondary px-2 py-1 rounded">
+                        {recipe.skillLevel}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="bg-secondary px-2 py-1 rounded">
-                      {recipe.skillLevel}
-                    </span>
-                    <span className="bg-secondary px-2 py-1 rounded">
-                      {recipe.prepTime + recipe.cookTime} min
-                    </span>
-                    <span className="bg-secondary px-2 py-1 rounded">
-                      {recipe.servings} servings
-                    </span>
+                      <span className="bg-secondary px-2 py-1 rounded">
+                        {recipe.prepTime + recipe.cookTime} min
+                      </span>
+                      <span className="bg-secondary px-2 py-1 rounded">
+                        {recipe.servings} servings
+                      </span>
+                    </div>
                   </div>
                 </Link>
                 <Button
