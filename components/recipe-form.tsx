@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { useAuth } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Loader2, X, ArrowRight, Move } from "lucide-react";
+import { Plus, Loader2, X, ArrowRight, Move, Save } from "lucide-react";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
@@ -29,6 +31,21 @@ import { CSS } from "@dnd-kit/utilities";
 
 interface RecipeFormProps {
   onSuccess?: () => void;
+  recipeId?: Id<"recipes">;
+  initialData?: {
+    title: string;
+    description?: string;
+    cuisine: string[];
+    skillLevel: string;
+    cookTime: number;
+    prepTime: number;
+    cost: string;
+    canFreeze: boolean;
+    canReheat: boolean;
+    servings: number;
+    ingredients?: Array<{ name: string; amount?: string }>;
+    steps?: Array<{ instruction: string; stepNumber?: number }>;
+  };
 }
 
 interface SortableIngredientItemProps {
@@ -135,9 +152,10 @@ function SortableStepItem({ id, step, index, onRemove }: SortableStepItemProps) 
   );
 }
 
-export function RecipeForm({ onSuccess }: RecipeFormProps) {
+export function RecipeForm({ onSuccess, recipeId, initialData }: RecipeFormProps) {
   const { isSignedIn, isLoaded } = useAuth();
   const createRecipe = useMutation(api.recipes.create);
+  const updateRecipe = useMutation(api.recipes.update);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cuisineTags, setCuisineTags] = useState<string[]>([]);
   const [cuisineInput, setCuisineInput] = useState("");
@@ -145,6 +163,8 @@ export function RecipeForm({ onSuccess }: RecipeFormProps) {
   const [ingredientInput, setIngredientInput] = useState("");
   const [steps, setSteps] = useState<string[]>([]);
   const [stepInput, setStepInput] = useState("");
+  
+  const isEditing = !!recipeId && !!initialData;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -185,6 +205,37 @@ export function RecipeForm({ onSuccess }: RecipeFormProps) {
     canReheat: false,
     servings: "",
   });
+
+  // Populate form when initialData is provided
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        title: initialData.title,
+        description: initialData.description || "",
+        skillLevel: initialData.skillLevel,
+        cookTime: initialData.cookTime.toString(),
+        prepTime: initialData.prepTime.toString(),
+        cost: initialData.cost,
+        canFreeze: initialData.canFreeze,
+        canReheat: initialData.canReheat,
+        servings: initialData.servings.toString(),
+      });
+      
+      setCuisineTags(initialData.cuisine || []);
+      
+      if (initialData.ingredients) {
+        setIngredients(
+          initialData.ingredients.map((ing) => 
+            ing.amount ? `${ing.amount} ${ing.name}` : ing.name
+          )
+        );
+      }
+      
+      if (initialData.steps) {
+        setSteps(initialData.steps.map((step) => step.instruction));
+      }
+    }
+  }, [initialData]);
 
   const handleAddCuisine = () => {
     const trimmed = cuisineInput.trim().toLowerCase();
@@ -249,24 +300,24 @@ export function RecipeForm({ onSuccess }: RecipeFormProps) {
     e.preventDefault();
     
     if (!isLoaded) {
-      alert("Please wait while we verify your authentication.");
+      toast.error("Please wait while we verify your authentication.");
       return;
     }
     
     if (!isSignedIn) {
-      alert("You must be signed in to create a recipe. Please sign in and try again.");
+      toast.error("You must be signed in to create a recipe. Please sign in and try again.");
       return;
     }
     
     if (cuisineTags.length === 0) {
-      alert("Please add at least one cuisine tag.");
+      toast.error("Please add at least one cuisine tag.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await createRecipe({
+      const recipeData = {
         title: formData.title,
         description: formData.description || undefined,
         cuisine: cuisineTags,
@@ -279,36 +330,47 @@ export function RecipeForm({ onSuccess }: RecipeFormProps) {
         servings: parseInt(formData.servings) || 1,
         ingredients: ingredients,
         steps: steps,
-      });
+      };
 
-      // Reset form
-      setFormData({
-        title: "",
-        description: "",
-        skillLevel: "beginner",
-        cookTime: "",
-        prepTime: "",
-        cost: "medium",
-        canFreeze: false,
-        canReheat: false,
-        servings: "",
-      });
-      setCuisineTags([]);
-      setCuisineInput("");
-      setIngredients([]);
-      setIngredientInput("");
-      setSteps([]);
-      setStepInput("");
+      if (isEditing && recipeId) {
+        await updateRecipe({
+          id: recipeId,
+          ...recipeData,
+        });
+        toast.success("Recipe updated successfully!");
+      } else {
+        await createRecipe(recipeData);
+        toast.success("Recipe created successfully!");
+        
+        // Reset form only after creation
+        setFormData({
+          title: "",
+          description: "",
+          skillLevel: "beginner",
+          cookTime: "",
+          prepTime: "",
+          cost: "medium",
+          canFreeze: false,
+          canReheat: false,
+          servings: "",
+        });
+        setCuisineTags([]);
+        setCuisineInput("");
+        setIngredients([]);
+        setIngredientInput("");
+        setSteps([]);
+        setStepInput("");
+      }
       
-      // Close form after successful creation
+      // Call success callback
       onSuccess?.();
     } catch (error) {
-      console.error("Error creating recipe:", error);
+      console.error(`Error ${isEditing ? "updating" : "creating"} recipe:`, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       if (errorMessage.includes("Not authenticated")) {
-        alert("Authentication error. Please sign out and sign back in, then try again.");
+        toast.error("Authentication error. Please sign out and sign back in, then try again.");
       } else {
-        alert(`Failed to create recipe: ${errorMessage}`);
+        toast.error(`Failed to ${isEditing ? "update" : "create"} recipe: ${errorMessage}`);
       }
     } finally {
       setIsSubmitting(false);
@@ -599,12 +661,21 @@ export function RecipeForm({ onSuccess }: RecipeFormProps) {
         {isSubmitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Creating...
+            {isEditing ? "Saving..." : "Creating..."}
           </>
         ) : (
           <>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Recipe
+            {isEditing ? (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Recipe
+              </>
+            )}
           </>
         )}
       </Button>

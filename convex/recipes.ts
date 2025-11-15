@@ -21,6 +21,44 @@ export const list = query({
   },
 });
 
+export const getById = query({
+  args: { id: v.id("recipes") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+    
+    const userId = identity.subject;
+    const recipe = await ctx.db.get(args.id);
+    
+    // Verify ownership
+    if (!recipe || recipe.userId !== userId) {
+      return null;
+    }
+    
+    // Get ingredients
+    const ingredients = await ctx.db
+      .query("ingredients")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", args.id))
+      .order("asc")
+      .collect();
+    
+    // Get cooking steps
+    const steps = await ctx.db
+      .query("recipeSteps")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", args.id))
+      .order("asc")
+      .collect();
+    
+    return {
+      ...recipe,
+      ingredients,
+      steps,
+    };
+  },
+});
+
 export const create = mutation({
   args: {
     title: v.string(),
@@ -82,6 +120,134 @@ export const create = mutation({
     }
     
     return recipeId;
+  },
+});
+
+export const update = mutation({
+  args: {
+    id: v.id("recipes"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    cuisine: v.array(v.string()),
+    skillLevel: v.string(),
+    cookTime: v.number(),
+    prepTime: v.number(),
+    cost: v.string(),
+    canFreeze: v.boolean(),
+    canReheat: v.boolean(),
+    servings: v.number(),
+    ingredients: v.optional(v.array(v.string())),
+    steps: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx);
+    
+    // Verify ownership
+    const recipe = await ctx.db.get(args.id);
+    if (!recipe || recipe.userId !== userId) {
+      throw new Error("Recipe not found or you don't have permission to edit it");
+    }
+    
+    // Update recipe
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      title: args.title,
+      description: args.description,
+      cuisine: args.cuisine,
+      skillLevel: args.skillLevel,
+      cookTime: args.cookTime,
+      prepTime: args.prepTime,
+      cost: args.cost,
+      canFreeze: args.canFreeze,
+      canReheat: args.canReheat,
+      servings: args.servings,
+      updatedAt: now,
+    });
+    
+    // Delete existing ingredients
+    const existingIngredients = await ctx.db
+      .query("ingredients")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", args.id))
+      .collect();
+    
+    for (const ingredient of existingIngredients) {
+      await ctx.db.delete(ingredient._id);
+    }
+    
+    // Insert new ingredients
+    if (args.ingredients && args.ingredients.length > 0) {
+      for (let i = 0; i < args.ingredients.length; i++) {
+        await ctx.db.insert("ingredients", {
+          recipeId: args.id,
+          name: args.ingredients[i],
+          amount: "",
+          order: i,
+        });
+      }
+    }
+    
+    // Delete existing steps
+    const existingSteps = await ctx.db
+      .query("recipeSteps")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", args.id))
+      .collect();
+    
+    for (const step of existingSteps) {
+      await ctx.db.delete(step._id);
+    }
+    
+    // Insert new cooking steps
+    if (args.steps && args.steps.length > 0) {
+      for (let i = 0; i < args.steps.length; i++) {
+        await ctx.db.insert("recipeSteps", {
+          recipeId: args.id,
+          type: "cooking",
+          stepNumber: i + 1,
+          instruction: args.steps[i],
+          order: i,
+        });
+      }
+    }
+    
+    return args.id;
+  },
+});
+
+export const remove = mutation({
+  args: { id: v.id("recipes") },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx);
+    
+    // Verify ownership
+    const recipe = await ctx.db.get(args.id);
+    if (!recipe || recipe.userId !== userId) {
+      throw new Error("Recipe not found or you don't have permission to delete it");
+    }
+    
+    // Delete all related ingredients
+    const ingredients = await ctx.db
+      .query("ingredients")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", args.id))
+      .collect();
+    
+    for (const ingredient of ingredients) {
+      await ctx.db.delete(ingredient._id);
+    }
+    
+    // Delete all related recipe steps
+    const steps = await ctx.db
+      .query("recipeSteps")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", args.id))
+      .collect();
+    
+    for (const step of steps) {
+      await ctx.db.delete(step._id);
+    }
+    
+    // Delete the recipe itself
+    await ctx.db.delete(args.id);
+    
+    return args.id;
   },
 });
 
