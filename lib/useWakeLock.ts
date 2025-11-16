@@ -10,7 +10,7 @@ interface WakeLock {
   request(type: "screen"): Promise<WakeLockSentinel>;
 }
 
-interface NavigatorWithWakeLock extends Navigator {
+interface NavigatorWithWakeLock extends Omit<Navigator, 'wakeLock'> {
   wakeLock?: WakeLock;
 }
 

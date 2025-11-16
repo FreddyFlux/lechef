@@ -12,9 +12,9 @@ import {
   CarouselPrevious,
   type CarouselApi,
 } from "@/components/ui/carousel";
-import { 
-  Calendar, 
-  ChefHat, 
+import {
+  Calendar,
+  ChefHat,
   Loader2,
   ArrowLeft,
   Edit,
@@ -26,24 +26,36 @@ import { useParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import { ShoppingList } from "@/components/shopping-list";
 
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_NAMES = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 export default function WeeklyPlanDetailPage() {
   const params = useParams();
   const planId = params.id as Id<"weeklyPlans">;
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
-  
+
   const plan = useQuery(api.weeklyPlans.getById, { id: planId });
 
   useEffect(() => {
     if (!carouselApi) return;
 
-    setCurrent(carouselApi.selectedScrollSnap());
-
-    carouselApi.on("select", () => {
+    const updateCurrent = () => {
       setCurrent(carouselApi.selectedScrollSnap());
-    });
+    };
+
+    // Set initial value
+    updateCurrent();
+
+    // Subscribe to changes
+    carouselApi.on("select", updateCurrent);
   }, [carouselApi]);
 
   const formatDate = (dayIndex: number) => {
@@ -53,15 +65,27 @@ export default function WeeklyPlanDetailPage() {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const formatWeekDate = () => {
-    if (!plan) return "";
+  const formatWeekDate = (): { start: string; end: string } => {
+    if (!plan) {
+      // This should never happen since we check plan before calling this function
+      // But TypeScript needs a return value
+      return { start: "", end: "" };
+    }
     const date = new Date(plan.weekStartDate);
     const endDate = new Date(plan.weekStartDate);
     endDate.setDate(endDate.getDate() + 6);
-    
+
     return {
-      start: date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-      end: endDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+      start: date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+      end: endDate.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
     };
   };
 
@@ -83,7 +107,8 @@ export default function WeeklyPlanDetailPage() {
           <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <h2 className="text-2xl font-bold mb-2">Plan Not Found</h2>
           <p className="text-muted-foreground mb-4">
-            This weekly plan doesn't exist or you don't have permission to view it.
+            This weekly plan doesn&apos;t exist or you don&apos;t have
+            permission to view it.
           </p>
           <Link href="/dashboard/weekly-plan">
             <Button>Back to Weekly Plans</Button>
@@ -149,11 +174,14 @@ export default function WeeklyPlanDetailPage() {
         >
           <CarouselContent className="-ml-2 md:-ml-4">
             {plan.days.map((day, index) => (
-              <CarouselItem key={day.dayOfWeek} className="pl-2 md:pl-4 basis-full md:basis-1/3">
-                <div 
+              <CarouselItem
+                key={day.dayOfWeek}
+                className="pl-2 md:pl-4 basis-full md:basis-1/3"
+              >
+                <div
                   className={`rounded-lg p-6 flex flex-col min-h-[500px] bg-card transition-all duration-300 ${
-                    index === current 
-                      ? "border-2 border-primary shadow-lg z-10" 
+                    index === current
+                      ? "border-2 border-primary shadow-lg z-10"
                       : "border border-border"
                   }`}
                 >
@@ -161,7 +189,9 @@ export default function WeeklyPlanDetailPage() {
                     <h3 className="font-semibold text-2xl mb-1">
                       {DAY_NAMES[day.dayOfWeek]}
                     </h3>
-                    <p className="text-sm text-muted-foreground">{formatDate(day.dayOfWeek)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(day.dayOfWeek)}
+                    </p>
                   </div>
 
                   {day.recipe ? (
@@ -179,7 +209,9 @@ export default function WeeklyPlanDetailPage() {
                           </div>
                         )}
                       </div>
-                      <h4 className="font-medium text-xl mb-2">{day.recipe.title}</h4>
+                      <h4 className="font-medium text-xl mb-2">
+                        {day.recipe.title}
+                      </h4>
                       {day.recipe.description && (
                         <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
                           {day.recipe.description}
@@ -197,9 +229,10 @@ export default function WeeklyPlanDetailPage() {
                       </div>
                       <div className="mt-auto">
                         <Link
-                          href={day.recipe.isOwnRecipe 
-                            ? `/dashboard/recipes/${day.recipe._id}`
-                            : `/recipes/${day.recipe.slug || ""}`
+                          href={
+                            day.recipe.isOwnRecipe
+                              ? `/dashboard/recipes/${day.recipe._id}`
+                              : `/recipes/${day.recipe.slug || ""}`
                           }
                           className="block"
                         >
@@ -233,10 +266,16 @@ export default function WeeklyPlanDetailPage() {
           {plan.days.map((day) => {
             const date = new Date(plan.weekStartDate);
             date.setDate(date.getDate() + day.dayOfWeek);
-            const formattedDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-            
+            const formattedDate = date.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            });
+
             return (
-              <div key={day.dayOfWeek} className="p-4 hover:bg-muted/50 transition-colors">
+              <div
+                key={day.dayOfWeek}
+                className="p-4 hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <div className="w-24 text-sm font-medium text-muted-foreground">
@@ -248,16 +287,19 @@ export default function WeeklyPlanDetailPage() {
                     <div className="flex-1">
                       {day.recipe ? (
                         <Link
-                          href={day.recipe.isOwnRecipe 
-                            ? `/dashboard/recipes/${day.recipe._id}`
-                            : `/recipes/${day.recipe.slug || ""}`
+                          href={
+                            day.recipe.isOwnRecipe
+                              ? `/dashboard/recipes/${day.recipe._id}`
+                              : `/recipes/${day.recipe.slug || ""}`
                           }
                           className="font-medium hover:text-primary transition-colors"
                         >
                           {day.recipe.title}
                         </Link>
                       ) : (
-                        <span className="text-muted-foreground italic">No recipe assigned</span>
+                        <span className="text-muted-foreground italic">
+                          No recipe assigned
+                        </span>
                       )}
                     </div>
                   </div>
@@ -270,4 +312,3 @@ export default function WeeklyPlanDetailPage() {
     </div>
   );
 }
-

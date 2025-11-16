@@ -162,7 +162,7 @@ export default function NewWeeklyPlanPage() {
   );
 
   // Merge local state with saved data and cached recipe details
-  const displayDays = useMemo(() => {
+  const displayDays = useMemo<Array<{ dayOfWeek: number; recipeId?: Id<"recipes">; recipe: RecipeSearchResult | null }>>(() => {
     return days.map(day => {
       if (!day.recipeId) {
         return { ...day, recipe: null };
@@ -176,8 +176,8 @@ export default function NewWeeklyPlanPage() {
       
       // Then try saved plan
       const savedDay = savedPlan?.days.find(d => d.dayOfWeek === day.dayOfWeek && d.recipeId === day.recipeId);
-      if (savedDay?.recipe) {
-        return { ...day, recipe: savedDay.recipe };
+      if (savedDay && 'recipe' in savedDay && savedDay.recipe) {
+        return { ...day, recipe: savedDay.recipe as RecipeSearchResult };
       }
       
       // Otherwise return without recipe details (will be fetched after save)
