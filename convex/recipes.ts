@@ -1,6 +1,45 @@
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { getUserId } from "./auth";
+import { api } from "./_generated/api";
+import * as aiService from "./ai";
+
+// Extract function references to avoid circular type inference issues
+const createRecipeMutation = api.recipes.create;
+const checkSlugExistsQuery = api.recipes.checkSlugExists;
+
+/**
+ * Converts a string to a URL-friendly slug
+ */
+function slugify(text: string): string {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')           // Replace spaces with hyphens
+    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+    .replace(/\-\-+/g, '-')          // Replace multiple hyphens with single hyphen
+    .replace(/^-+/, '')             // Trim hyphens from start
+    .replace(/-+$/, '');             // Trim hyphens from end
+}
+
+/**
+ * Generate a unique slug from a title (for use in actions)
+ */
+async function generateUniqueSlugInAction(ctx: any, title: string): Promise<string> {
+  let baseSlug = slugify(title);
+  let slug = baseSlug;
+  let counter = 1;
+  
+  // Check if slug exists using the query
+  while (await ctx.runQuery(checkSlugExistsQuery, { slug })) {
+    slug = `${baseSlug}-${counter}`;
+    counter++;
+  }
+  
+  return slug;
+}
 
 export const list = query({
   args: {},
@@ -80,6 +119,8 @@ export const create = mutation({
     ingredients: v.optional(v.array(v.string())),
     steps: v.optional(v.array(v.string())),
     imageStorageId: v.optional(v.id("_storage")),
+    isPublic: v.optional(v.boolean()),
+    slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getUserId(ctx);
@@ -100,6 +141,8 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
       imageStorageId: args.imageStorageId,
+      isPublic: args.isPublic,
+      slug: args.slug,
     });
     
     // Insert ingredients
@@ -402,6 +445,36 @@ export const getBySlug = query({
   },
 });
 
+export const listPublic = query({
+  args: {},
+  handler: async (ctx) => {
+    // Get all public recipes (no authentication required)
+    const allRecipes = await ctx.db.query("recipes").collect();
+    const publicRecipes = allRecipes.filter(
+      (recipe) => recipe.isPublic === true && recipe.slug // Only return recipes with slugs (shareable)
+    );
+    
+    // Sort by most recently updated
+    publicRecipes.sort((a, b) => b.updatedAt - a.updatedAt);
+    
+    // Get image URLs for all recipes
+    const recipesWithImages = await Promise.all(
+      publicRecipes.map(async (recipe) => {
+        const imageUrl = recipe.imageStorageId
+          ? await ctx.storage.getUrl(recipe.imageStorageId)
+          : null;
+        
+        return {
+          ...recipe,
+          imageUrl,
+        };
+      })
+    );
+    
+    return recipesWithImages;
+  },
+});
+
 // Generate upload URL for image upload
 export const generateUploadUrl = action({
   args: {},
@@ -499,6 +572,116 @@ export const search = query({
     );
     
     return resultsWithImages;
+  },
+});
+
+// Generate recipe from AI prompt
+export const generateFromPrompt = action({
+  args: {
+    prompt: v.string(),
+    preferences: v.optional(
+      v.object({
+        cuisine: v.optional(v.array(v.string())),
+        dietaryRestrictions: v.optional(v.array(v.string())),
+        skillLevel: v.optional(v.string()),
+        maxCookTime: v.optional(v.number()),
+        servings: v.optional(v.number()),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx);
+
+    // Validate prompt
+    if (!args.prompt || args.prompt.trim().length < 3) {
+      throw new Error("Prompt must be at least 3 characters long");
+    }
+
+    try {
+      // Generate recipe using AI service
+      const aiRecipe = await aiService.generateRecipe(args.prompt, args.preferences);
+
+      // Generate unique slug for AI-generated recipe
+      const slug = await generateUniqueSlugInAction(ctx, aiRecipe.title);
+
+      // Create recipe via mutation - AI-generated recipes are public by default
+      const recipeId: Id<"recipes"> = await ctx.runMutation(createRecipeMutation, {
+        title: aiRecipe.title,
+        description: aiRecipe.description,
+        cuisine: aiRecipe.cuisine,
+        skillLevel: aiRecipe.skillLevel,
+        cookTime: aiRecipe.cookTime,
+        prepTime: aiRecipe.prepTime,
+        cost: aiRecipe.cost,
+        canFreeze: aiRecipe.canFreeze,
+        canReheat: aiRecipe.canReheat,
+        servings: aiRecipe.servings,
+        ingredients: aiRecipe.ingredients.map((ing) => `${ing.amount} ${ing.name}`),
+        steps: aiRecipe.steps,
+        isPublic: true, // AI-generated recipes are public by default
+        slug, // Auto-generate slug for AI recipes
+      });
+
+      return recipeId;
+    } catch (error) {
+      throw new Error(
+        `Failed to generate recipe: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  },
+});
+
+// Import recipe from URL
+export const importFromUrl = action({
+  args: {
+    url: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx);
+
+    // Validate URL
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(args.url);
+      // Only allow http/https protocols
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        throw new Error("Invalid URL protocol");
+      }
+    } catch (error) {
+      throw new Error("Invalid URL format");
+    }
+
+    try {
+      // Extract recipe using AI service
+      const aiRecipe = await aiService.extractRecipeFromUrl(args.url);
+
+      // Generate unique slug for AI-imported recipe
+      const slug = await generateUniqueSlugInAction(ctx, aiRecipe.title);
+
+      // Create recipe via mutation - AI-imported recipes are public by default
+      const recipeId: Id<"recipes"> = await ctx.runMutation(createRecipeMutation, {
+        title: aiRecipe.title,
+        description: aiRecipe.description,
+        cuisine: aiRecipe.cuisine,
+        skillLevel: aiRecipe.skillLevel,
+        cookTime: aiRecipe.cookTime,
+        prepTime: aiRecipe.prepTime,
+        cost: aiRecipe.cost,
+        canFreeze: aiRecipe.canFreeze,
+        canReheat: aiRecipe.canReheat,
+        servings: aiRecipe.servings,
+        ingredients: aiRecipe.ingredients.map((ing) => `${ing.amount} ${ing.name}`),
+        steps: aiRecipe.steps,
+        isPublic: true, // AI-imported recipes are public by default
+        slug, // Auto-generate slug for AI recipes
+      });
+
+      return recipeId;
+    } catch (error) {
+      throw new Error(
+        `Failed to import recipe from URL: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   },
 });
 

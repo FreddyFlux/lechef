@@ -1,6 +1,8 @@
 "use client";
 
 import { RecipeForm } from "@/components/recipe-form";
+import { AIRecipeGenerator } from "@/components/ai-recipe-generator";
+import { RecipeUrlImporter } from "@/components/recipe-url-importer";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -22,7 +24,29 @@ export default function NewRecipePage() {
       </div>
 
       <div className="bg-card border rounded-lg p-6">
-        <RecipeForm onSuccess={() => window.location.href = "/dashboard/recipes"} />
+        <div className="mb-6 flex flex-col gap-2">
+          <AIRecipeGenerator
+            onRecipeGenerated={(recipeId) => {
+              window.location.href = `/dashboard/recipes/${recipeId}`;
+            }}
+          />
+          <RecipeUrlImporter
+            onRecipeImported={(recipeId) => {
+              window.location.href = `/dashboard/recipes/${recipeId}`;
+            }}
+          />
+        </div>
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">Or create manually</span>
+          </div>
+        </div>
+        <div className="mt-6">
+          <RecipeForm onSuccess={() => window.location.href = "/dashboard/recipes"} />
+        </div>
       </div>
     </div>
   );

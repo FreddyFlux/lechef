@@ -24,26 +24,27 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { ShoppingList } from "@/components/shopping-list";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function WeeklyPlanDetailPage() {
   const params = useParams();
   const planId = params.id as Id<"weeklyPlans">;
-  const [api, setApi] = useState<CarouselApi>();
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   
   const plan = useQuery(api.weeklyPlans.getById, { id: planId });
 
   useEffect(() => {
-    if (!api) return;
+    if (!carouselApi) return;
 
-    setCurrent(api.selectedScrollSnap());
+    setCurrent(carouselApi.selectedScrollSnap());
 
-    api.on("select", () => {
-      setCurrent(api.selectedScrollSnap());
+    carouselApi.on("select", () => {
+      setCurrent(carouselApi.selectedScrollSnap());
     });
-  }, [api]);
+  }, [carouselApi]);
 
   const formatDate = (dayIndex: number) => {
     if (!plan) return "";
@@ -114,12 +115,15 @@ export default function WeeklyPlanDetailPage() {
               {weekDates.start} - {weekDates.end}
             </p>
           </div>
-          <Link href={`/dashboard/weekly-plan/${planId}/edit`}>
-            <Button>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit Plan
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <ShoppingList planId={planId} />
+            <Link href={`/dashboard/weekly-plan/${planId}/edit`}>
+              <Button>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit Plan
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
@@ -135,7 +139,7 @@ export default function WeeklyPlanDetailPage() {
       {/* Weekly Plan Carousel */}
       <div className="w-full max-w-6xl mx-auto relative">
         <Carousel
-          setApi={setApi}
+          setApi={setCarouselApi}
           opts={{
             align: "center",
             loop: false,

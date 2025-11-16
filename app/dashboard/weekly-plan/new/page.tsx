@@ -29,6 +29,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { WeeklyPlanGenerator } from "@/components/weekly-plan-generator";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -202,9 +203,17 @@ export default function NewWeeklyPlanPage() {
               Plan your meals for the week
             </p>
           </div>
-          <Button onClick={handleSave}>
-            Save Plan
-          </Button>
+          <div className="flex items-center gap-2">
+            <WeeklyPlanGenerator
+              weekStartDate={weekStartTimestamp}
+              onPlanGenerated={() => {
+                router.push("/dashboard/weekly-plan");
+              }}
+            />
+            <Button onClick={handleSave}>
+              Save Plan
+            </Button>
+          </div>
         </div>
 
         {/* Week Selection */}
