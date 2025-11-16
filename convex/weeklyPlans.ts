@@ -28,7 +28,7 @@ function slugify(text: string): string {
 /**
  * Generate a unique slug from a title (for use in actions)
  */
-async function generateUniqueSlugInAction(ctx: any, title: string): Promise<string> {
+async function generateUniqueSlugInAction(ctx: { runQuery: (query: typeof checkSlugExistsQuery, args: { slug: string }) => Promise<boolean> }, title: string): Promise<string> {
   let baseSlug = slugify(title);
   let slug = baseSlug;
   let counter = 1;
@@ -69,12 +69,12 @@ export const getCurrentWeek = query({
     if (!plan) {
       // Return default plan with empty days
       return {
-        _id: null as any,
+        _id: null as Id<"weeklyPlans"> | null,
         userId,
         weekStartDate: weekStart,
         days: Array.from({ length: 7 }, (_, i) => ({
           dayOfWeek: i,
-          recipeId: undefined as any,
+          recipeId: undefined as Id<"recipes"> | undefined,
         })),
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -133,12 +133,12 @@ export const getWeek = query({
     if (!plan) {
       // Return default plan with empty days
       return {
-        _id: null as any,
+        _id: null as Id<"weeklyPlans"> | null,
         userId,
         weekStartDate: args.weekStartDate,
         days: Array.from({ length: 7 }, (_, i) => ({
           dayOfWeek: i,
-          recipeId: undefined as any,
+          recipeId: undefined as Id<"recipes"> | undefined,
         })),
         createdAt: Date.now(),
         updatedAt: Date.now(),

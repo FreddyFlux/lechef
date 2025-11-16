@@ -6,18 +6,13 @@ import { Id } from "@/convex/_generated/dataModel";
 import { RecipeForm } from "@/components/recipe-form";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ChefHat, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
 
 export default function EditRecipePage() {
   const params = useParams();
@@ -27,6 +22,7 @@ export default function EditRecipePage() {
   const recipe = useQuery(api.recipes.getById, { id: recipeId });
   const deleteRecipe = useMutation(api.recipes.remove);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSuccess = () => {
     router.push(`/dashboard/recipes/${recipeId}`);
@@ -37,6 +33,8 @@ export default function EditRecipePage() {
   };
 
   const handleDeleteConfirm = async () => {
+    if (!recipe) return;
+    setIsDeleting(true);
     try {
       await deleteRecipe({ id: recipeId });
       toast.success(`Recipe "${recipe.title}" deleted successfully`);
@@ -46,16 +44,15 @@ export default function EditRecipePage() {
       console.error("Error deleting recipe:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       toast.error(`Failed to delete recipe: ${errorMessage}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   if (recipe === undefined) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="text-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">Loading recipe...</p>
-        </div>
+        <LoadingState message="Loading recipe..." />
       </div>
     );
   }
@@ -63,16 +60,12 @@ export default function EditRecipePage() {
   if (recipe === null) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="text-center py-12 border rounded-lg">
-          <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-bold mb-2">Recipe Not Found</h2>
-          <p className="text-muted-foreground mb-4">
-            This recipe doesn't exist or you don't have permission to edit it.
-          </p>
-          <Link href="/dashboard/recipes">
-            <Button>Back to Recipes</Button>
-          </Link>
-        </div>
+        <EmptyState
+          title="Recipe Not Found"
+          description="This recipe doesn't exist or you don't have permission to edit it."
+          actionLabel="Back to Recipes"
+          actionHref="/dashboard/recipes"
+        />
       </div>
     );
   }
@@ -125,28 +118,15 @@ export default function EditRecipePage() {
         />
       </div>
 
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Recipe</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{recipe.title}"? This action
-              cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Recipe"
+        description='Are you sure you want to delete "{name}"? This action cannot be undone.'
+        itemName={recipe.title}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

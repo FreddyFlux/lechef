@@ -27,7 +27,7 @@ function slugify(text: string): string {
 /**
  * Generate a unique slug from a title (for use in actions)
  */
-async function generateUniqueSlugInAction(ctx: any, title: string): Promise<string> {
+async function generateUniqueSlugInAction(ctx: { runQuery: (query: typeof checkSlugExistsQuery, args: { slug: string }) => Promise<boolean> }, title: string): Promise<string> {
   let baseSlug = slugify(title);
   let slug = baseSlug;
   let counter = 1;
@@ -220,7 +220,20 @@ export const update = mutation({
     
     // Update recipe
     const now = Date.now();
-    const updateData: any = {
+    const updateData: {
+      title: string;
+      description?: string;
+      cuisine: string[];
+      skillLevel: string;
+      cookTime: number;
+      prepTime: number;
+      cost: string;
+      canFreeze: boolean;
+      canReheat: boolean;
+      servings: number;
+      updatedAt: number;
+      imageStorageId?: Id<"_storage"> | undefined;
+    } = {
       title: args.title,
       description: args.description,
       cuisine: args.cuisine,

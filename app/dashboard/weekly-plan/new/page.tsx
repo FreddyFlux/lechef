@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WeeklyPlanGenerator } from "@/components/weekly-plan-generator";
+import type { RecipeSearchResult } from "@/lib/types";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -81,7 +82,7 @@ export default function NewWeeklyPlanPage() {
     Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i }))
   );
 
-  const handleAssignRecipe = async (recipeId: Id<"recipes">, dayOfWeek: number, recipeData?: any) => {
+  const handleAssignRecipe = async (recipeId: Id<"recipes">, dayOfWeek: number, recipeData?: RecipeSearchResult) => {
     try {
       const updatedDays = days.map((day) => {
         if (day.dayOfWeek === dayOfWeek) {
@@ -152,7 +153,7 @@ export default function NewWeeklyPlanPage() {
   };
 
   // Store recipe details for immediate display
-  const [recipeDetailsMap, setRecipeDetailsMap] = useState<Map<Id<"recipes">, any>>(new Map());
+  const [recipeDetailsMap, setRecipeDetailsMap] = useState<Map<Id<"recipes">, RecipeSearchResult>>(new Map());
 
   // Fetch saved plan to get recipe details after save
   const savedPlan = useQuery(

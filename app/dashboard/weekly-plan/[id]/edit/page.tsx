@@ -29,6 +29,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import type { RecipeSearchResult } from "@/lib/types";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -78,9 +79,9 @@ export default function EditWeeklyPlanPage() {
   }, [plan]);
 
   // Store recipe details for immediate display
-  const [recipeDetailsMap, setRecipeDetailsMap] = useState<Map<Id<"recipes">, any>>(new Map());
+  const [recipeDetailsMap, setRecipeDetailsMap] = useState<Map<Id<"recipes">, RecipeSearchResult>>(new Map());
 
-  const handleAssignRecipe = async (recipeId: Id<"recipes">, dayOfWeek: number, recipeData?: any) => {
+  const handleAssignRecipe = async (recipeId: Id<"recipes">, dayOfWeek: number, recipeData?: RecipeSearchResult) => {
     if (!plan) return;
 
     try {

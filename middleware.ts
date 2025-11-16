@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks(.*)",
+  "/recipes(.*)", // Public recipe pages (shared recipes)
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
